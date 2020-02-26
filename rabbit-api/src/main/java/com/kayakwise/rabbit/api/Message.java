@@ -6,7 +6,7 @@ import java.util.Map;
 
 /**
  * @ClassName Message
- * @Description TODO
+ * @Description 消息
  * @Author Jaycrees
  * @Date 2020/2/25 0:18
  * @Version 1.0

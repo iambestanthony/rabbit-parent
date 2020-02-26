@@ -7,6 +7,13 @@ import com.kayakwise.rabbit.api.Message;
 import com.kayakwise.rabbit.api.MessageType;
 import com.kayakwise.rabbit.api.exception.MessageException;
 import com.kayakwise.rabbit.api.exception.MessageRunTimeException;
+import com.kayakwise.rabbit.common.convert.GenericMessageConverter;
+import com.kayakwise.rabbit.common.convert.RabbitMessageConverter;
+import com.kayakwise.rabbit.common.serializer.Serializer;
+import com.kayakwise.rabbit.common.serializer.SerializerFactory;
+import com.kayakwise.rabbit.common.serializer.impl.JacksonSerializer;
+import com.kayakwise.rabbit.common.serializer.impl.JacksonSerializerFactory;
+import com.kayakwise.rabbit.producer.service.MessageStoreService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
@@ -23,7 +30,7 @@ import java.util.Map;
  * @Description 池化RabbitTemplate封装
  * 1.每一个topic对应一个rabbitTemplate
  * 2.提高发送效率
- * 3.可以根据不同的需求
+ * 3.可以根据不同的需求指定化不同的RabbitTemplate
  * @Author Jaycrees
  * @Date 2020/2/26 0:27
  * @Version 1.0
@@ -35,6 +42,11 @@ public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback{
     private Map<String /* topic */, RabbitTemplate> rabbitMap = Maps.newConcurrentMap();
 
     private Splitter splitter = Splitter.on("#");
+
+    private SerializerFactory serializerFactory = JacksonSerializerFactory.INSTANCE;
+
+    @Autowired
+    private MessageStoreService messageStoreService;
 
     @Autowired
     private ConnectionFactory connectionFactory;
@@ -53,8 +65,11 @@ public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback{
         newTemplate.setRetryTemplate(new RetryTemplate());
         newTemplate.setRoutingKey(message.getRoutingKey());
 
-        //对于message的序列化方式
-        //newTemplate.setMessageConverter(messageConverter);
+        //添加序列化和反序列化和converter对象
+        Serializer serializer = serializerFactory.create();
+        GenericMessageConverter gmc = new GenericMessageConverter(serializer);
+        RabbitMessageConverter rmc = new RabbitMessageConverter(gmc);
+        newTemplate.setMessageConverter(rmc);
 
         String messageType = message.getMessageType();
         if (!MessageType.RAPID.equals(messageType)) {
@@ -73,8 +88,10 @@ public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback{
         long sendTime = Long.parseLong(strings.get(1));
 
         if (ack) {
+            this.messageStoreService.success(messageId);
             log.info("send message is OK, confirm messageId:{},sendTime:{}", messageId, sendTime);
         } else {
+            this.messageStoreService.failure(messageId);
             log.error("send message is Fail, confirm messageId:{},sendTime:{}", messageId, sendTime);
         }
 
