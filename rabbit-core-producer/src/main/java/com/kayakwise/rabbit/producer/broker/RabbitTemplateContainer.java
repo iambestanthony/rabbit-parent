@@ -37,7 +37,7 @@ import java.util.Map;
  **/
 @Slf4j
 @Component
-public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback{
+public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback {
 
     private Map<String /* topic */, RabbitTemplate> rabbitMap = Maps.newConcurrentMap();
 
@@ -86,9 +86,12 @@ public class RabbitTemplateContainer implements RabbitTemplate.ConfirmCallback{
         List<String> strings = splitter.splitToList(correlationData.getId());
         String messageId = strings.get(0);
         long sendTime = Long.parseLong(strings.get(1));
-
+        String messageType = strings.get(2);
         if (ack) {
-            this.messageStoreService.success(messageId);
+            //如果当前消息类型为reliant 我们就去数据库查找并更新
+            if (MessageType.RELIANT.endsWith(messageType)) {
+                this.messageStoreService.success(messageId);
+            }
             log.info("send message is OK, confirm messageId:{},sendTime:{}", messageId, sendTime);
         } else {
             this.messageStoreService.failure(messageId);

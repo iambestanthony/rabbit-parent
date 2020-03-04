@@ -38,17 +38,22 @@ public class RabbitBrokerImpl implements RabbitBroker {
 
     @Override
     public void reliantSend(Message message) {
-        //把数据库的消息发送日志记录好
-        Date now = new Date();
-        BrokerMessage brokerMessage = new BrokerMessage();
-        brokerMessage.setMessageId(message.getMessageId());
-        brokerMessage.setStatus(BrokerMessageStatus.SENDING.getCode());
-        //tryCount
-        brokerMessage.setNextRetry(DateUtils.addMinutes(now, BrokerMessageConst.TIMEOUT));
-        brokerMessage.setCreateTime(now);
-        brokerMessage.setUpdateTime(now);
-        brokerMessage.setMessage(message);
-        messageStoreService.insert(brokerMessage);
+        message.setMessageType(MessageType.RELIANT);
+        BrokerMessage bm = messageStoreService.selectByMessageId(message.getMessageId());
+        if (bm == null) {
+            //把数据库的消息发送日志记录好
+            Date now = new Date();
+            BrokerMessage brokerMessage = new BrokerMessage();
+            brokerMessage.setMessageId(message.getMessageId());
+            brokerMessage.setStatus(BrokerMessageStatus.SENDING.getCode());
+            //tryCount
+            brokerMessage.setNextRetry(DateUtils.addMinutes(now, BrokerMessageConst.TIMEOUT));
+            brokerMessage.setCreateTime(now);
+            brokerMessage.setUpdateTime(now);
+            brokerMessage.setMessage(message);
+            messageStoreService.insert(brokerMessage);
+        }
+
         //执行真正发送消息逻辑
         sendKernel(message);
     }
@@ -66,7 +71,10 @@ public class RabbitBrokerImpl implements RabbitBroker {
      */
     private void sendKernel(Message message) {
         AsyncBaseQueue.submit((Runnable) ()->{
-            CorrelationData correlationData = new CorrelationData(String.format("%s#%s", message.getMessageId(), System.currentTimeMillis()));
+            CorrelationData correlationData = new CorrelationData(String.format("%s#%s#%s",
+                    message.getMessageId(),
+                    System.currentTimeMillis(),
+                    message.getMessageType()));
             String topic = message.getTopic();
             String routingKey = message.getRoutingKey();
 
